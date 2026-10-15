@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href='data:application/manifest+json,{"name":"Хвостатый Рубеж: Настя и Тори","short_name":"Рубеж","display":"fullscreen","orientation":"landscape","background_color":"#090d14","theme_color":"#090d14"}' />
   <title>Хвостатый Рубеж: Настя и Такса Тори (2D Зомби-RPG)</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +27,28 @@
       overflow: hidden;
       background-color: #090d14;
       color: #f1f5f9;
+    }
+    #appWrapper {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      width: 100dvw;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #090d14;
+    }
+    /* Автоматический поворот всего экрана игры на 90° в горизонтальный режим на телефонах */
+    #appWrapper.force-landscape-90 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vh;
+      height: 100vw;
+      width: 100dvh;
+      height: 100dvw;
+      transform: rotate(90deg) translateY(-100%);
+      transform-origin: top left;
+      z-index: 10;
     }
     #gameCanvas {
       display: block;
@@ -69,9 +95,20 @@
       background: rgba(100, 116, 139, 0.65);
       border-radius: 3px;
     }
+    .touch-stick-base {
+      background: radial-gradient(circle, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.82) 100%);
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.65), inset 0 0 14px rgba(245, 158, 11, 0.18);
+      touch-action: none;
+    }
+    .touch-aim-base {
+      background: radial-gradient(circle, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.82) 100%);
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.65), inset 0 0 14px rgba(244, 63, 94, 0.22);
+      touch-action: none;
+    }
   </style>
 </head>
 <body class="relative w-full h-full select-none overflow-hidden bg-slate-950">
+  <div id="appWrapper">
 
   <!-- ОСНОВНОЙ 2D ХОЛСТ ИГРЫ -->
   <canvas id="gameCanvas"></canvas>
@@ -172,6 +209,15 @@
           <button onclick="toggleFullMap()" class="glass-panel skill-btn rounded-xl px-2.5 py-2 text-xs font-bold text-cyan-300 border border-cyan-500/40 hover:bg-slate-800/90" title="Открыть полную карту мира [M]">
             🗺️ Карта
           </button>
+          <button id="btnToggleStick" onclick="toggleMobileControls()" class="glass-panel skill-btn rounded-xl px-2.5 py-2 text-xs font-bold text-emerald-300 border border-emerald-500/40 hover:bg-slate-800/90" title="Показать или скрыть экранные стики для телефона">
+            🕹️ Стик: ВКЛ
+          </button>
+          <button id="btnAimMode" onclick="cycleTouchAimMode()" class="glass-panel skill-btn rounded-xl px-2.5 py-2 text-xs font-bold text-amber-200 border border-amber-500/40 hover:bg-slate-800/90" title="Режим наведения пальцем по экрану">
+            👆 Прицел: Экран
+          </button>
+          <button id="btnRotateScreen" onclick="cycleOrientationMode()" class="glass-panel skill-btn rounded-xl px-2.5 py-2 text-xs font-bold text-cyan-200 border border-cyan-400/40 hover:bg-slate-800/90" title="Автоматический переворот экрана для телефона / Полный экран">
+            🔄 Поворот: АВТО
+          </button>
           <button id="btnSound" onclick="toggleSound()" class="glass-panel skill-btn rounded-xl px-2 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800/90" title="Звук Вкл/Выкл">
             🔊
           </button>
@@ -208,17 +254,72 @@
     </div>
   </div>
 
-  <!-- МОБИЛЬНЫЙ ВИРТУАЛЬНЫЙ ДЖОЙСТИК -->
-  <div id="touchJoystickZone" class="md:hidden pointer-events-auto absolute bottom-24 left-4 z-20 w-28 h-28 rounded-full bg-slate-900/50 border-2 border-slate-600/50 flex items-center justify-center touch-none">
-    <div id="touchJoystickKnob" class="w-12 h-12 rounded-full bg-amber-400/70 border-2 border-white shadow-lg pointer-events-none"></div>
+  <!-- МОБИЛЬНОЕ УПРАВЛЕНИЕ: ЛЕВЫЙ СТИК ХОДЬБЫ + ПРАВЫЙ СТИК НАВЕДЕНИЯ И КНОПКИ -->
+  <div id="mobileControlsOverlay" class="pointer-events-none absolute inset-x-0 bottom-20 sm:bottom-24 z-20 px-3 sm:px-6 flex items-end justify-between">
+    
+    <!-- Левый блок: Кнопки Рывка / Обыска + Виртуальный стик передвижения -->
+    <div class="pointer-events-auto flex flex-col items-start gap-2.5 touch-none">
+      <div class="flex items-center gap-2">
+        <button id="btnMobileSprint" class="glass-panel skill-btn px-3 py-1.5 rounded-xl border border-amber-400/50 text-amber-300 text-xs font-extrabold shadow-lg active:scale-95 flex items-center gap-1">
+          <span>⚡</span><span id="mobileSprintLabel">Рывок</span>
+        </button>
+        <button id="btnMobileInteract" onclick="triggerInteraction()" class="hidden glass-panel skill-btn px-3 py-1.5 rounded-xl border border-yellow-400/80 bg-yellow-500/20 text-yellow-300 text-xs font-black shadow-lg animate-pulse">
+          ✋ Взять [E]
+        </button>
+      </div>
+
+      <!-- Стик движения (360 градусов, мультитач) -->
+      <div id="touchJoystickZone" class="touch-stick-base relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-amber-400/50 flex items-center justify-center">
+        <!-- Кольцо мёртвой зоны и оси -->
+        <div class="w-12 h-12 rounded-full border border-slate-500/35 pointer-events-none"></div>
+        <div class="absolute inset-x-3 h-px bg-slate-500/25 pointer-events-none"></div>
+        <div class="absolute inset-y-3 w-px bg-slate-500/25 pointer-events-none"></div>
+        <!-- Линия вектора отклонения -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 128 128">
+          <line id="joyVectorLine" x1="64" y1="64" x2="64" y2="64" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" opacity="0.75" />
+        </svg>
+        <!-- Подвижная шляпка стика (thumb) -->
+        <div id="touchJoystickKnob" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 border-2 border-white shadow-xl pointer-events-none flex items-center justify-center text-slate-950 font-black text-xs transition-transform duration-75">
+          🕹️
+        </div>
+        <span class="absolute -bottom-5 text-[10px] font-bold text-amber-300/90 tracking-wide uppercase pointer-events-none">Ходьба</span>
+      </div>
+    </div>
+
+    <!-- Правый блок: Кнопка Огня + Стик Наведения/Прицела -->
+    <div class="pointer-events-auto flex flex-col items-end gap-2.5 touch-none">
+      <div class="flex items-center gap-2">
+        <button id="btnAutoAimFire" onclick="toggleAutoFireOnAim()" class="glass-panel skill-btn px-2.5 py-1.5 rounded-xl border border-rose-400/50 text-rose-200 text-[11px] font-bold shadow-lg">
+          🎯 Стрельба при наведении: ВКЛ
+        </button>
+        <button id="btnMobileFire" class="glass-panel skill-btn px-3.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-500 border border-rose-300 text-white text-xs font-black shadow-lg active:scale-95">
+          🔥 ОГОНЬ
+        </button>
+      </div>
+
+      <!-- Правый стик наведения и стрельбы (мультитач) -->
+      <div id="touchAimZone" class="touch-aim-base relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-rose-500/55 flex items-center justify-center">
+        <div class="w-14 h-14 rounded-full border border-rose-400/30 pointer-events-none"></div>
+        <div class="absolute inset-x-3 h-px bg-rose-400/25 pointer-events-none"></div>
+        <div class="absolute inset-y-3 w-px bg-rose-400/25 pointer-events-none"></div>
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 128 128">
+          <line id="aimVectorLine" x1="64" y1="64" x2="64" y2="64" stroke="#fb7185" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" opacity="0.8" />
+        </svg>
+        <div id="touchAimKnob" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-rose-500 to-orange-600 border-2 border-white shadow-xl pointer-events-none flex items-center justify-center text-white font-black text-sm transition-transform duration-75">
+          🎯
+        </div>
+        <span class="absolute -bottom-5 text-[10px] font-bold text-rose-300/90 tracking-wide uppercase pointer-events-none">Прицел / Водить по экрану</span>
+      </div>
+    </div>
+
   </div>
 
   <!-- НИЖНИЙ HUD: ПАНЕЛЬ НАВЫКОВ НАСТИ И ТОРИ (1-5) -->
   <footer class="pointer-events-none absolute bottom-0 left-0 right-0 z-20 p-2 sm:p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2">
     <!-- Левая подсказка управления -->
     <div class="pointer-events-auto hidden lg:flex glass-panel rounded-xl px-3 py-2 text-[11px] text-slate-300 items-center gap-3">
-      <div><b class="text-amber-400">WASD</b> — ход</div>
-      <div><b class="text-amber-400">Shift</b> — рывок</div>
+      <div><b class="text-amber-400">WASD / Левый стик</b> — ход</div>
+      <div><b class="text-rose-400">Палец по экрану / Правый стик</b> — прицел</div>
       <div><b class="text-emerald-400">E</b> — обыск/верстак</div>
       <div><b class="text-cyan-400">M</b> — карта мира</div>
     </div>
@@ -469,6 +570,8 @@
       </button>
     </div>
   </div>
+
+  </div><!-- /#appWrapper -->
 
   <script>
     /*************************************************************************
@@ -1030,13 +1133,46 @@
      * 4. ПАРАМЕТРЫ ГЕРОИНИ НАСТИ, ТАКСЫ ТОРИ И СОСТОЯНИЯ ИГРЫ
      *************************************************************************/
     const keys = {};
-    const mouse = { x: 0, y: 0, worldX: CAMP_POS.x, worldY: CAMP_POS.y, down: false };
-    const touchJoy = { active: false, dx: 0, dy: 0, startX: 0, startY: 0 };
+    const mouse = { x: 0, y: 0, worldX: CAMP_POS.x, worldY: CAMP_POS.y, down: false, active: false };
+
+    // Мультитач состояние для левого стика движения, правого стика прицела и наведения пальцем по экрану
+    const touchJoy = {
+      active: false,
+      touchId: null,
+      dx: 0,
+      dy: 0,
+      magnitude: 0,
+      startX: 0,
+      startY: 0,
+      sprintToggle: false
+    };
+
+    const touchAim = {
+      active: false,
+      source: null, // 'screen' | 'stick'
+      touchId: null,
+      mode: 'direct', // 'direct' (палец указывает точку на карте) | 'swipe' (свайп задаёт угол прицела)
+      dx: 0,
+      dy: 0,
+      angle: 0,
+      distance: 240,
+      screenX: 0,
+      screenY: 0,
+      startX: 0,
+      startY: 0,
+      worldX: CAMP_POS.x + 200,
+      worldY: CAMP_POS.y,
+      fireButtonHeld: false
+    };
 
     const gameState = {
       paused: false,
       autoFire: true,
+      autoFireOnAim: true,
+      mobileControlsVisible: true,
       showInGameBadges: true,
+      orientationMode: 'auto', // 'auto' (авто-переворот на телефоне) | 'force90' (всегда 90°) | 'normal' (без CSS поворота)
+      isCssRotated90: false,
       currentZoneId: 'camp',
       wave: 1,
       waveTimer: 24,
@@ -1050,6 +1186,67 @@
         dogSpeed: { lvl: 1, cost: 35 }
       }
     };
+
+    const appWrapper = document.getElementById('appWrapper');
+
+    // Преобразование экранных координат (clientX, clientY) в координаты игрового окна (с учётом поворота на 90°)
+    function toAppCoords(clientX, clientY) {
+      if (gameState.isCssRotated90) {
+        return {
+          x: clientY,
+          y: window.innerWidth - clientX
+        };
+      }
+      return { x: clientX, y: clientY };
+    }
+
+    // Получение относительных координат (0..1) внутри любого элемента (например, карты мира) с учётом поворота
+    function getNormalizedElementCoords(clientX, clientY, el) {
+      const rect = el.getBoundingClientRect();
+      if (gameState.isCssRotated90) {
+        return {
+          nx: Math.max(0, Math.min(1, (clientY - rect.top) / (rect.height || 1))),
+          ny: Math.max(0, Math.min(1, (rect.right - clientX) / (rect.width || 1)))
+        };
+      }
+      return {
+        nx: Math.max(0, Math.min(1, (clientX - rect.left) / (rect.width || 1))),
+        ny: Math.max(0, Math.min(1, (clientY - rect.top) / (rect.height || 1)))
+      };
+    }
+
+    // Попытка системного перевода браузера в полноэкранный горизонтальный режим при первом касании
+    function tryLockHardwareLandscape() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) {}
+    }
+
+    function cycleOrientationMode() {
+      const modes = ['auto', 'force90', 'normal'];
+      const labels = {
+        auto: '🔄 Поворот: АВТО',
+        force90: '🔄 Поворот: 90° ВКЛ',
+        normal: '🔄 Поворот: ВЫКЛ'
+      };
+      const idx = (modes.indexOf(gameState.orientationMode) + 1) % modes.length;
+      gameState.orientationMode = modes[idx];
+      const btn = document.getElementById('btnRotateScreen');
+      if (btn) btn.textContent = labels[gameState.orientationMode];
+
+      // Также пробуем запросить нативный полный экран и аппаратный landscape при переключении
+      if (gameState.orientationMode !== 'normal') {
+        try {
+          if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+        } catch (e) {}
+        tryLockHardwareLandscape();
+      }
+      resizeCanvas();
+    }
 
     const hero = {
       name: 'Настя',
@@ -1106,10 +1303,32 @@
     let nearestInteractable = null;
 
     function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const isPortraitViewport = vh > vw;
+
+      // Если телефон держится вертикально (vh > vw) и включён режим 'auto' или 'force90',
+      // автоматически разворачиваем весь игровой интерфейс и холст горизонтально на 90°!
+      const shouldRotate90 =
+        gameState.orientationMode === 'force90' ||
+        (gameState.orientationMode === 'auto' && isPortraitViewport);
+
+      gameState.isCssRotated90 = shouldRotate90;
+
+      if (shouldRotate90) {
+        appWrapper.classList.add('force-landscape-90');
+        canvas.width = vh;
+        canvas.height = vw;
+      } else {
+        appWrapper.classList.remove('force-landscape-90');
+        canvas.width = vw;
+        canvas.height = vh;
+      }
     }
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(resizeCanvas, 60);
+    });
 
     function showBanner(title, sub) {
       const banner = document.getElementById('zoneBanner');
@@ -1423,6 +1642,41 @@
       btn.textContent = `🎯 Авто-огонь: ${gameState.autoFire ? 'ВКЛ' : 'ВЫКЛ'}`;
     }
 
+    function toggleMobileControls() {
+      gameState.mobileControlsVisible = !gameState.mobileControlsVisible;
+      const overlay = document.getElementById('mobileControlsOverlay');
+      const btn = document.getElementById('btnToggleStick');
+      if (gameState.mobileControlsVisible) {
+        overlay.classList.remove('hidden');
+        btn.textContent = '🕹️ Стик: ВКЛ';
+        btn.classList.replace('text-slate-400', 'text-emerald-300');
+      } else {
+        overlay.classList.add('hidden');
+        btn.textContent = '🕹️ Стик: СКРЫТЬ';
+        btn.classList.replace('text-emerald-300', 'text-slate-400');
+      }
+    }
+
+    function cycleTouchAimMode() {
+      touchAim.mode = touchAim.mode === 'direct' ? 'swipe' : 'direct';
+      const btn = document.getElementById('btnAimMode');
+      if (touchAim.mode === 'direct') {
+        btn.textContent = '👆 Прицел: Экран';
+        showBanner('НАВЕДЕНИЕ ПАЛЬЦЕМ: ПО ЭКРАНУ', 'Водите пальцем в любом месте экрана — туда направлен лазерный прицел Насти');
+      } else {
+        btn.textContent = '👆 Прицел: Свайп';
+        showBanner('НАВЕДЕНИЕ ПАЛЬЦЕМ: СВАЙП-УГОЛ', 'Свайп пальцем по экрану работает как свободный джойстик поворота лазера');
+      }
+    }
+
+    function toggleAutoFireOnAim() {
+      gameState.autoFireOnAim = !gameState.autoFireOnAim;
+      const btn = document.getElementById('btnAutoAimFire');
+      if (btn) {
+        btn.textContent = `🎯 Стрельба при наведении: ${gameState.autoFireOnAim ? 'ВКЛ' : 'ВЫКЛ'}`;
+      }
+    }
+
     function togglePause() {
       gameState.paused = !gameState.paused;
       document.getElementById('btnPause').textContent = gameState.paused ? '▶️' : '⏸️';
@@ -1456,9 +1710,7 @@
     }
 
     fullMapCanvas.addEventListener('click', e => {
-      const rect = fullMapCanvas.getBoundingClientRect();
-      const nx = (e.clientX - rect.left) / rect.width;
-      const ny = (e.clientY - rect.top) / rect.height;
+      const { nx, ny } = getNormalizedElementCoords(e.clientX, e.clientY, fullMapCanvas);
       gpsWaypoint = {
         x: Math.round(nx * WORLD_SIZE),
         y: Math.round(ny * WORLD_SIZE)
@@ -1622,9 +1874,14 @@
       if (keys['KeyA'] || keys['ArrowLeft']) mx -= 1;
       if (keys['KeyD'] || keys['ArrowRight']) mx += 1;
 
-      const isSprinting = (keys['ShiftLeft'] || keys['ShiftRight']) && hero.stamina > 5 && (mx !== 0 || my !== 0);
+      const isSprinting = ((keys['ShiftLeft'] || keys['ShiftRight'] || touchJoy.sprintToggle) && hero.stamina > 5 && (mx !== 0 || my !== 0));
       if (isSprinting) {
         hero.stamina = Math.max(0, hero.stamina - 32 * dt);
+        if (hero.stamina <= 6) {
+          touchJoy.sprintToggle = false;
+          const spBtn = document.getElementById('btnMobileSprint');
+          if (spBtn) spBtn.classList.remove('bg-amber-500/30', 'border-amber-300');
+        }
       } else {
         hero.stamina = Math.min(hero.maxStamina, hero.stamina + 22 * dt);
       }
@@ -1641,11 +1898,13 @@
       const prevHeroX = hero.x;
       const prevHeroY = hero.y;
       if (mx !== 0 || my !== 0) {
-        const len = Math.hypot(mx, my);
-        const curSpeed = hero.speed * (isSprinting ? 1.48 : 1) * (inToxic ? 0.68 : 1);
-        hero.x += (mx / len) * curSpeed * dt;
-        hero.y += (my / len) * curSpeed * dt;
-        hero.walkCycle += dt * (isSprinting ? 16 : 10);
+        const rawLen = Math.hypot(mx, my);
+        // Плавная скорость при наклоне мобильного стика (от 25% до 100%)
+        const stickFactor = touchJoy.active ? Math.min(1, Math.max(0.25, touchJoy.magnitude)) : 1;
+        const curSpeed = hero.speed * stickFactor * (isSprinting ? 1.48 : 1) * (inToxic ? 0.68 : 1);
+        hero.x += (mx / rawLen) * curSpeed * dt;
+        hero.y += (my / rawLen) * curSpeed * dt;
+        hero.walkCycle += dt * (isSprinting ? 16 : 10) * stickFactor;
       }
 
       hero.x = Math.max(40, Math.min(WORLD_SIZE - 40, hero.x));
@@ -1688,11 +1947,14 @@
       }
 
       const promptEl = document.getElementById('interactPrompt');
+      const mobileInteractBtn = document.getElementById('btnMobileInteract');
       if (nearestInteractable) {
         document.getElementById('interactPromptText').textContent = nearestInteractable.label;
         promptEl.classList.remove('hidden');
+        if (mobileInteractBtn) mobileInteractBtn.classList.remove('hidden');
       } else {
         promptEl.classList.add('hidden');
+        if (mobileInteractBtn) mobileInteractBtn.classList.add('hidden');
       }
 
       let targetZombie = null;
@@ -1702,17 +1964,44 @@
         if (d < minDist) { minDist = d; targetZombie = z; }
       }
 
-      if (mouse.down) {
+      // Приоритет наведения: 1) Палец на экране или правый стик прицела, 2) Мышь, 3) Ближайший зомби, 4) Направление бега
+      if (touchAim.active) {
+        if (touchAim.source === 'screen' && touchAim.mode === 'direct') {
+          const fingerWorldX = camera.x - canvas.width / 2 + touchAim.screenX;
+          const fingerWorldY = camera.y - canvas.height / 2 + touchAim.screenY;
+          const distFromHero = Math.hypot(fingerWorldX - hero.x, fingerWorldY - hero.y);
+          if (distFromHero > 8) {
+            touchAim.angle = Math.atan2(fingerWorldY - hero.y, fingerWorldX - hero.x);
+          }
+          touchAim.distance = Math.max(110, Math.min(480, distFromHero));
+          touchAim.worldX = hero.x + Math.cos(touchAim.angle) * touchAim.distance;
+          touchAim.worldY = hero.y + Math.sin(touchAim.angle) * touchAim.distance;
+        } else {
+          // Свайп-наведение или правый стик-прицел
+          touchAim.worldX = hero.x + Math.cos(touchAim.angle) * touchAim.distance;
+          touchAim.worldY = hero.y + Math.sin(touchAim.angle) * touchAim.distance;
+        }
+        hero.angle = touchAim.angle;
+      } else if (mouse.down || mouse.active) {
         hero.angle = Math.atan2(mouse.worldY - hero.y, mouse.worldX - hero.x);
+        touchAim.worldX = mouse.worldX;
+        touchAim.worldY = mouse.worldY;
       } else if (targetZombie && minDist < 580) {
         hero.angle = Math.atan2(targetZombie.y - hero.y, targetZombie.x - hero.x);
+        touchAim.worldX = targetZombie.x;
+        touchAim.worldY = targetZombie.y;
       } else if (mx !== 0 || my !== 0) {
         hero.angle = Math.atan2(my, mx);
+        touchAim.worldX = hero.x + Math.cos(hero.angle) * 240;
+        touchAim.worldY = hero.y + Math.sin(hero.angle) * 240;
       }
 
       hero.fireCooldown -= dt;
       const effectiveFireRate = hero.rapidBurstTimer > 0 ? hero.fireRate * 0.45 : hero.fireRate;
-      if ((mouse.down || keys['Space'] || (gameState.autoFire && targetZombie && minDist < 540)) && hero.fireCooldown <= 0) {
+      const manualFireTriggered = mouse.down || keys['Space'] || touchAim.fireButtonHeld || (touchAim.active && gameState.autoFireOnAim);
+      const autoFireTriggered = gameState.autoFire && !touchAim.active && targetZombie && minDist < 540;
+
+      if ((manualFireTriggered || autoFireTriggered) && hero.fireCooldown <= 0) {
         hero.fireCooldown = effectiveFireRate;
         playSound('shoot');
         const muzzleX = hero.x + Math.cos(hero.angle) * 26;
@@ -2738,12 +3027,25 @@
         ctx.stroke();
       }
 
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.28)';
-      ctx.lineWidth = 1.5;
+      // Тактический лазерный целеуказатель от карабина Насти
+      const aimDist = Math.max(90, Math.min(480, Math.hypot(touchAim.worldX - hero.x, touchAim.worldY - hero.y) || 240));
+      ctx.strokeStyle = touchAim.active ? 'rgba(244, 63, 94, 0.72)' : 'rgba(239, 68, 68, 0.34)';
+      ctx.lineWidth = touchAim.active ? 2.5 : 1.5;
       ctx.beginPath();
       ctx.moveTo(22, 0);
-      ctx.lineTo(240, 0);
+      ctx.lineTo(aimDist, 0);
       ctx.stroke();
+
+      if (touchAim.active) {
+        ctx.strokeStyle = 'rgba(254, 205, 211, 0.85)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath();
+        ctx.moveTo(26, 0);
+        ctx.lineTo(aimDist, 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       ctx.fillStyle = '#5c3a24';
       ctx.strokeStyle = '#2b190f';
@@ -2797,6 +3099,47 @@
       ctx.font = 'bold 12px Inter';
       ctx.textAlign = 'center';
       ctx.fillText('Настя', hero.x, hero.y - 23);
+
+      // Тактическое прицельное перекрестие (при наведении пальцем по экрану, стиком или мышью)
+      if (touchAim.active || mouse.down || mouse.active) {
+        const cx = touchAim.worldX;
+        const cy = touchAim.worldY;
+        // Проверяем, есть ли зомби в радиусе захвата прицела
+        const lockedZombie = zombies.find(z => Math.hypot(z.x - cx, z.y - cy) < z.radius + 28);
+        const reticleColor = lockedZombie ? '#fb7185' : '#38bdf8';
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.strokeStyle = reticleColor;
+        ctx.lineWidth = 2;
+
+        // Внешнее кольцо прицела
+        ctx.beginPath();
+        ctx.arc(0, 0, lockedZombie ? 20 : 16, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Перекрестие
+        ctx.beginPath();
+        ctx.moveTo(-24, 0); ctx.lineTo(-9, 0);
+        ctx.moveTo(9, 0); ctx.lineTo(24, 0);
+        ctx.moveTo(0, -24); ctx.lineTo(0, -9);
+        ctx.moveTo(0, 9); ctx.lineTo(0, 24);
+        ctx.stroke();
+
+        // Центральная лазерная точка
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (lockedZombie) {
+          ctx.fillStyle = '#fda4af';
+          ctx.font = '800 10px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText('ЦЕЛЬ', 0, -26);
+        }
+        ctx.restore();
+      }
 
       // Стрелка GPS-навигатора
       if (gpsWaypoint) {
@@ -2873,6 +3216,33 @@
       ctx.strokeRect(0, 0, WORLD_SIZE, WORLD_SIZE);
 
       ctx.restore();
+
+      // Экранный индикатор точки касания при свайп-наведении пальцем по экрану
+      if (touchAim.active && touchAim.source === 'screen') {
+        ctx.save();
+        if (touchAim.mode === 'swipe') {
+          ctx.strokeStyle = 'rgba(251, 113, 133, 0.55)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(touchAim.startX, touchAim.startY, 34, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = 'rgba(251, 113, 133, 0.8)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(touchAim.startX, touchAim.startY);
+          ctx.lineTo(touchAim.screenX, touchAim.screenY);
+          ctx.stroke();
+        }
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+        ctx.strokeStyle = '#fda4af';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(touchAim.screenX, touchAim.screenY, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
 
       renderMinimap();
     }
@@ -3115,7 +3485,7 @@
     }
 
     /*************************************************************************
-     * 8. ОБРАБОТЧИКИ ВВОДА (КЛАВИАТУРА, МЫШЬ, ТАЧ-ДЖОЙСТИК)
+     * 8. ОБРАБОТЧИКИ ВВОДА (КЛАВИАТУРА, МЫШЬ, МУЛЬТИТАЧ СТИК + НАВЕДЕНИЕ ПАЛЬЦЕМ)
      *************************************************************************/
     window.addEventListener('keydown', e => {
       keys[e.code] = true;
@@ -3131,43 +3501,268 @@
     window.addEventListener('keyup', e => { keys[e.code] = false; });
 
     canvas.addEventListener('mousemove', e => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
+      const pt = toAppCoords(e.clientX, e.clientY);
+      mouse.x = pt.x;
+      mouse.y = pt.y;
+      mouse.active = true;
     });
-    canvas.addEventListener('mousedown', () => { mouse.down = true; });
+    canvas.addEventListener('mousedown', e => {
+      const pt = toAppCoords(e.clientX, e.clientY);
+      mouse.x = pt.x;
+      mouse.y = pt.y;
+      mouse.down = true;
+      mouse.active = true;
+    });
     window.addEventListener('mouseup', () => { mouse.down = false; });
 
+    // --- 1. ЛЕВЫЙ СТИК ПЕРЕДВИЖЕНИЯ (МУЛЬТИТАЧ ПО ИДЕНТИФИКАТОРУ КАСАНИЯ) ---
     const joyZone = document.getElementById('touchJoystickZone');
     const joyKnob = document.getElementById('touchJoystickKnob');
+    const joyVectorLine = document.getElementById('joyVectorLine');
+
     joyZone.addEventListener('touchstart', e => {
-      const t = e.touches[0];
+      e.preventDefault();
+      e.stopPropagation();
+      tryLockHardwareLandscape();
+      const t = e.changedTouches[0];
       const rect = joyZone.getBoundingClientRect();
+      const centerApp = toAppCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
       touchJoy.active = true;
-      touchJoy.startX = rect.left + rect.width / 2;
-      touchJoy.startY = rect.top + rect.height / 2;
+      touchJoy.touchId = t.identifier;
+      touchJoy.startX = centerApp.x;
+      touchJoy.startY = centerApp.y;
+      mouse.active = false;
       updateJoystickTouch(t);
-    }, { passive: true });
+    }, { passive: false });
 
     joyZone.addEventListener('touchmove', e => {
+      e.preventDefault();
+      e.stopPropagation();
       if (!touchJoy.active) return;
-      updateJoystickTouch(e.touches[0]);
-    }, { passive: true });
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchJoy.touchId) {
+          updateJoystickTouch(e.changedTouches[i]);
+          break;
+        }
+      }
+    }, { passive: false });
 
-    joyZone.addEventListener('touchend', () => {
-      touchJoy.active = false;
-      touchJoy.dx = 0;
-      touchJoy.dy = 0;
-      joyKnob.style.transform = 'translate(0px, 0px)';
-    });
+    function resetLeftJoystick(e) {
+      if (!touchJoy.active) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchJoy.touchId) {
+          touchJoy.active = false;
+          touchJoy.touchId = null;
+          touchJoy.dx = 0;
+          touchJoy.dy = 0;
+          touchJoy.magnitude = 0;
+          joyKnob.style.transform = 'translate(0px, 0px)';
+          if (joyVectorLine) {
+            joyVectorLine.setAttribute('x2', '64');
+            joyVectorLine.setAttribute('y2', '64');
+          }
+          break;
+        }
+      }
+    }
+    joyZone.addEventListener('touchend', resetLeftJoystick, { passive: false });
+    joyZone.addEventListener('touchcancel', resetLeftJoystick, { passive: false });
 
     function updateJoystickTouch(t) {
-      const dx = t.clientX - touchJoy.startX;
-      const dy = t.clientY - touchJoy.startY;
-      const dist = Math.min(38, Math.hypot(dx, dy));
+      const maxR = 42;
+      const touchApp = toAppCoords(t.clientX, t.clientY);
+      const dx = touchApp.x - touchJoy.startX;
+      const dy = touchApp.y - touchJoy.startY;
+      const rawDist = Math.hypot(dx, dy);
+      const dist = Math.min(maxR, rawDist);
       const a = Math.atan2(dy, dx);
-      touchJoy.dx = Math.cos(a) * (dist / 38);
-      touchJoy.dy = Math.sin(a) * (dist / 38);
-      joyKnob.style.transform = `translate(${Math.cos(a) * dist}px, ${Math.sin(a) * dist}px)`;
+      const norm = dist / maxR;
+
+      touchJoy.magnitude = norm;
+      touchJoy.dx = norm > 0.08 ? Math.cos(a) * norm : 0;
+      touchJoy.dy = norm > 0.08 ? Math.sin(a) * norm : 0;
+
+      const offsetX = Math.cos(a) * dist;
+      const offsetY = Math.sin(a) * dist;
+      joyKnob.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+      if (joyVectorLine) {
+        joyVectorLine.setAttribute('x2', String(64 + offsetX));
+        joyVectorLine.setAttribute('y2', String(64 + offsetY));
+      }
+    }
+
+    // --- 2. ПРАВЫЙ СТИК НАВЕДЕНИЯ И СТРЕЛЬБЫ (МУЛЬТИТАЧ) ---
+    const aimZone = document.getElementById('touchAimZone');
+    const aimKnob = document.getElementById('touchAimKnob');
+    const aimVectorLine = document.getElementById('aimVectorLine');
+
+    aimZone.addEventListener('touchstart', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      tryLockHardwareLandscape();
+      const t = e.changedTouches[0];
+      const rect = aimZone.getBoundingClientRect();
+      const centerApp = toAppCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      touchAim.active = true;
+      touchAim.source = 'stick';
+      touchAim.touchId = t.identifier;
+      touchAim.startX = centerApp.x;
+      touchAim.startY = centerApp.y;
+      mouse.active = false;
+      updateAimStickTouch(t);
+    }, { passive: false });
+
+    aimZone.addEventListener('touchmove', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!touchAim.active || touchAim.source !== 'stick') return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchAim.touchId) {
+          updateAimStickTouch(e.changedTouches[i]);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    function resetAimStick(e) {
+      if (!touchAim.active || touchAim.source !== 'stick') return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchAim.touchId) {
+          touchAim.active = false;
+          touchAim.source = null;
+          touchAim.touchId = null;
+          aimKnob.style.transform = 'translate(0px, 0px)';
+          if (aimVectorLine) {
+            aimVectorLine.setAttribute('x2', '64');
+            aimVectorLine.setAttribute('y2', '64');
+          }
+          break;
+        }
+      }
+    }
+    aimZone.addEventListener('touchend', resetAimStick, { passive: false });
+    aimZone.addEventListener('touchcancel', resetAimStick, { passive: false });
+
+    function updateAimStickTouch(t) {
+      const maxR = 42;
+      const touchApp = toAppCoords(t.clientX, t.clientY);
+      const dx = touchApp.x - touchAim.startX;
+      const dy = touchApp.y - touchAim.startY;
+      const rawDist = Math.hypot(dx, dy);
+      const dist = Math.min(maxR, rawDist);
+      if (rawDist > 5) {
+        touchAim.angle = Math.atan2(dy, dx);
+        touchAim.distance = 150 + (dist / maxR) * 230;
+      }
+      const offsetX = Math.cos(touchAim.angle) * dist;
+      const offsetY = Math.sin(touchAim.angle) * dist;
+      aimKnob.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+      if (aimVectorLine) {
+        aimVectorLine.setAttribute('x2', String(64 + offsetX));
+        aimVectorLine.setAttribute('y2', String(64 + offsetY));
+      }
+    }
+
+    // --- 3. НАВЕДЕНИЕ ПАЛЬЦЕМ ПРЯМО ПО ЭКРАНУ (TOUCH AIM & DRAG НА CANVAS) ---
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      tryLockHardwareLandscape();
+      mouse.active = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchJoy.touchId) continue;
+        if (!touchAim.active) {
+          const pt = toAppCoords(t.clientX, t.clientY);
+          touchAim.active = true;
+          touchAim.source = 'screen';
+          touchAim.touchId = t.identifier;
+          touchAim.startX = pt.x;
+          touchAim.startY = pt.y;
+          touchAim.screenX = pt.x;
+          touchAim.screenY = pt.y;
+          updateScreenAimFromTouch(pt);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (touchAim.active && touchAim.source === 'screen' && t.identifier === touchAim.touchId) {
+          const pt = toAppCoords(t.clientX, t.clientY);
+          touchAim.screenX = pt.x;
+          touchAim.screenY = pt.y;
+          updateScreenAimFromTouch(pt);
+        }
+      }
+    }, { passive: false });
+
+    function endScreenAimTouch(e) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (touchAim.active && touchAim.source === 'screen' && t.identifier === touchAim.touchId) {
+          touchAim.active = false;
+          touchAim.source = null;
+          touchAim.touchId = null;
+        }
+      }
+    }
+    canvas.addEventListener('touchend', endScreenAimTouch, { passive: false });
+    canvas.addEventListener('touchcancel', endScreenAimTouch, { passive: false });
+
+    function updateScreenAimFromTouch(pt) {
+      if (touchAim.mode === 'direct') {
+        const worldX = camera.x - canvas.width / 2 + pt.x;
+        const worldY = camera.y - canvas.height / 2 + pt.y;
+        const dx = worldX - hero.x;
+        const dy = worldY - hero.y;
+        if (Math.hypot(dx, dy) > 6) {
+          touchAim.angle = Math.atan2(dy, dx);
+        }
+        touchAim.distance = Math.max(110, Math.min(480, Math.hypot(dx, dy)));
+      } else {
+        // Режим 'swipe' — ведение пальцем задаёт угол и дистанцию прицела относительно точки касания
+        const dx = pt.x - touchAim.startX;
+        const dy = pt.y - touchAim.startY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 6) {
+          touchAim.angle = Math.atan2(dy, dx);
+          touchAim.distance = Math.min(440, 140 + dist * 2.2);
+        }
+      }
+    }
+
+    // --- 4. МОБИЛЬНЫЕ КНОПКИ «РЫВОК» И «ОГОНЬ» ---
+    const btnMobileSprint = document.getElementById('btnMobileSprint');
+    if (btnMobileSprint) {
+      const toggleSprint = (e) => {
+        if (e) e.preventDefault();
+        touchJoy.sprintToggle = !touchJoy.sprintToggle;
+        if (touchJoy.sprintToggle) {
+          btnMobileSprint.classList.add('bg-amber-500/30', 'border-amber-300');
+        } else {
+          btnMobileSprint.classList.remove('bg-amber-500/30', 'border-amber-300');
+        }
+      };
+      btnMobileSprint.addEventListener('touchstart', toggleSprint, { passive: false });
+      btnMobileSprint.addEventListener('click', toggleSprint);
+    }
+
+    const btnMobileFire = document.getElementById('btnMobileFire');
+    if (btnMobileFire) {
+      btnMobileFire.addEventListener('touchstart', e => {
+        e.preventDefault();
+        touchAim.fireButtonHeld = true;
+      }, { passive: false });
+      btnMobileFire.addEventListener('touchend', e => {
+        e.preventDefault();
+        touchAim.fireButtonHeld = false;
+      }, { passive: false });
+      btnMobileFire.addEventListener('touchcancel', () => { touchAim.fireButtonHeld = false; });
+      btnMobileFire.addEventListener('mousedown', () => { touchAim.fireButtonHeld = true; });
+      btnMobileFire.addEventListener('mouseup', () => { touchAim.fireButtonHeld = false; });
     }
 
     let lastTime = performance.now();
